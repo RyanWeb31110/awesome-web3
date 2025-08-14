@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uniswap V2 深度解析</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            animation: fadeInDown 1s;
+        }
+        
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 20px;
+            opacity: 0.95;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 20px;
+            padding: 35px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            animation: fadeInUp 0.8s;
+        }
+        
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #667eea;
+            font-size: 28px;
+        }
+        
+        h3 {
+            color: #34495e;
+            margin: 20px 0 15px 0;
+            font-size: 20px;
+        }
+        
+        /* 版本对比 */
+        .version-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+        .version-card {
+            padding: 25px;
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+        
+        .version-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .v1-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .v2-card {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .version-card h4 {
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .version-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .version-card li {
+            margin: 10px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .version-card li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+        }
+        
+        /* Canvas容器 */
+        .canvas-container {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+            position: relative;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* 交互控制 */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 25px;
+            background: linear-gradient(135deg, #667eea15, #764ba215);
+            border-radius: 15px;
+            margin: 25px 0;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .control-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        input[type="number"], select {
+            padding: 12px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="number"]:focus, select:focus {
+            border-color: #764ba2;
+            outline: none;
+        }
+        
+        button {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        
+        /* 信息卡片 */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        
+        .info-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .info-card:hover {
+            transform: scale(1.05);
+        }
+        
+        .info-value {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .info-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        /* 特性卡片 */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.2);
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+            margin-bottom: 15px;
+        }
+        
+        .feature-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .feature-description {
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+        
+        /* 价格预言机展示 */
+        .oracle-display {
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        
+        .price-history {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .price-point {
+            text-align: center;
+        }
+        
+        .price-time {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+        
+        .price-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        /* 闪电贷流程 */
+        .flash-loan-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .flow-step {
+            flex: 1;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 2;
+        }
+        
+        .flow-step-number {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-weight: bold;
+        }
+        
+        .flow-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            z-index: 1;
+        }
+        
+        /* 公式展示 */
+        .formula-box {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 22px;
+            font-family: 'Courier New', monospace;
+            margin: 25px 0;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .math-explanation {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        
+        /* 警告和提示 */
+        .alert {
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #856404;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            color: #0c5460;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            color: #155724;
+        }
+        
+        /* 动画 */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 32px;
+            }
+            
+            .version-comparison {
+                grid-template-columns: 1fr;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .flash-loan-flow {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .flow-arrow {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 标题部分 -->
+        <div class="header">
+            <h1>🦄 Uniswap V2 深度解析</h1>
+            <p>2020年5月 - DeFi基础设施的革命性升级</p>
+        </div>
+        
+        <!-- V1 vs V2 对比 -->
+        <div class="section">
+            <h2>📊 V1 到 V2 的进化</h2>
+            <div class="version-comparison">
+                <div class="version-card v1-card">
+                    <h4>Uniswap V1 (2018)</h4>
+                    <ul>
+                        <li>仅支持 ETH ⇄ ERC20</li>
+                        <li>ERC20互换需要双跳</li>
+                        <li>无价格预言机</li>
+                        <li>无闪电贷功能</li>
+                        <li>固定0.3%手续费给LP</li>
+                        <li>简单的x·y=k公式</li>
+                    </ul>
+                </div>
+                <div class="version-card v2-card">
+                    <h4>Uniswap V2 (2020)</h4>
+                    <ul>
+                        <li>支持任意 ERC20 ⇄ ERC20</li>
+                        <li>直接交换，节省50%手续费</li>
+                        <li>内置TWAP价格预言机</li>
+                        <li>原生支持闪电贷</li>
+                        <li>可选协议费用（0.05%）</li>
+                        <li>优化的(x-Δx)·(y-Δy)=k公式</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 核心创新1：ERC20-ERC20交易对 -->
+        <div class="section">
+            <h2>🔄 核心创新1：任意代币对交易</h2>
+            
+            <div class="canvas-container">
+                <canvas id="tradingPairsCanvas" width="900" height="400"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>选择交易路径：</label>
+                    <select id="tradePathSelect" onchange="updateTradePath()">
+                        <option value="direct">V2直接交换 (DAI→USDC)</option>
+                        <option value="v1route">V1路由 (DAI→ETH→USDC)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>交易金额 (USD)：</label>
+                    <input type="number" id="tradeAmountUSD" value="10000" min="100" max="1000000">
+                </div>
+                <div class="control-group">
+                    <button onclick="simulateTrade()">模拟交易</button>
+                </div>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">路径步数</div>
+                    <div class="info-value" id="pathSteps">1</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">总手续费</div>
+                    <div class="info-value" id="totalFee">0.30%</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">费用金额</div>
+                    <div class="info-value" id="feeAmount">$30</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">节省费用</div>
+                    <div class="info-value" id="savedAmount">$30</div>
+                </div>
+            </div>
+            
+            <div class="alert alert-success">
+                <strong>💡 关键改进：</strong> V2允许直接创建任意ERC20代币对，无需ETH作为中介。这将交易成本降低50%，并提高了资本效率。
+            </div>
+        </div>
+        
+        <!-- 核心创新2：价格预言机 -->
+        <div class="section">
+            <h2>🔮 核心创新2：时间加权平均价格（TWAP）预言机</h2>
+            
+            <div class="formula-box">
+                TWAP = Σ(价格ᵢ × 时间ᵢ) / Σ时间ᵢ
+            </div>
+            
+            <div class="canvas-container">
+                <canvas id="oracleCanvas" width="900" height="400"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>价格操纵尝试（%）：<span id="manipulationValue">0</span></label>
+                    <input type="range" id="manipulationSlider" min="-50" max="50" value="0" step="5">
+                </div>
+                <div class="control-group">
+                    <label>观察时间窗口（区块）：</label>
+                    <input type="number" id="timeWindow" value="10" min="1" max="100">
+                </div>
+                <div class="control-group">
+                    <button onclick="simulateManipulation()">模拟价格操纵</button>
+                </div>
+            </div>
+            
+            <div class="oracle-display">
+                <h3>价格历史记录</h3>
+                <div class="price-history">
+                    <div class="price-point">
+                        <div class="price-time">区块 -10</div>
+                        <div class="price-value">$2000</div>
+                    </div>
+                    <div class="price-point">
+                        <div class="price-time">区块 -5</div>
+                        <div class="price-value">$2010</div>
+                    </div>
+                    <div class="price-point">
+                        <div class="price-time">当前区块</div>
+                        <div class="price-value" id="currentPrice">$2000</div>
+                    </div>
+                    <div class="price-point">
+                        <div class="price-time">TWAP</div>
+                        <div class="price-value" id="twapPrice" style="color: #27ae60;">$2003</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="math-explanation">
+                <h3>TWAP 防操纵机制：</h3>
+                <p><strong>累积价格存储：</strong> price0CumulativeLast += price0 * timeElapsed</p>
+                <p><strong>平均价格计算：</strong> TWAP = (cumulative_now - cumulative_then) / time_elapsed</p>
+                <p><strong>防护效果：</strong> 单个区块的价格操纵对长时间窗口的TWAP影响极小</p>
+            </div>
+        </div>
+        
+        <!-- 核心创新3：闪电贷 -->
+        <div class="section">
+            <h2>⚡ 核心创新3：原生闪电贷（Flash Swaps）</h2>
+            
+            <div class="flash-loan-flow">
+                <div class="flow-arrow"></div>
+                <div class="flow-step">
+                    <div class="flow-step-number">1</div>
+                    <strong>借出资产</strong>
+                    <p>从池中借出代币</p>
+                    <p style="color: #667eea;">无需抵押</p>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-number">2</div>
+                    <strong>执行操作</strong>
+                    <p>套利/清算/再融资</p>
+                    <p style="color: #667eea;">任意DeFi操作</p>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-step-number">3</div>
+                    <strong>归还+费用</strong>
+                    <p>归还本金+0.3%</p>
+                    <p style="color: #667eea;">同一交易内</p>
+                </div>
+            </div>
+            
+            <div class="code-block">
+// Uniswap V2 闪电贷示例代码
+function uniswapV2Call(address sender, uint amount0, uint amount1, bytes data) {
+    // 1. 接收借出的代币
+    uint amountBorrowed = amount0 > 0 ? amount0 : amount1;
+    
+    // 2. 执行套利逻辑
+    executeArbitrage(amountBorrowed);
+    
+    // 3. 计算需要归还的金额（含0.3%手续费）
+    uint amountToRepay = (amountBorrowed * 1003) / 1000;
+    
+    // 4. 归还代币给池子
+    IERC20(token).transfer(msg.sender, amountToRepay);
+}</div>
+            
+            <div class="canvas-container">
+                <canvas id="flashLoanCanvas" width="900" height="350"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>借贷金额 (ETH)：</label>
+                    <input type="number" id="loanAmount" value="100" min="1" max="10000">
+                </div>
+                <div class="control-group">
+                    <label>套利利润率 (%)：</label>
+                    <input type="number" id="profitRate" value="0.5" min="0" max="5" step="0.1">
+                </div>
+                <div class="control-group">
+                    <button onclick="calculateFlashLoan()">计算收益</button>
+                </div>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">借贷金额</div>
+                    <div class="info-value" id="borrowAmount">100 ETH</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">闪电贷费用</div>
+                    <div class="info-value" id="flashFee">0.3 ETH</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">套利收益</div>
+                    <div class="info-value" id="arbProfit">0.5 ETH</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">净利润</div>
+                    <div class="info-value" id="netProfit">0.2 ETH</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 核心创新4：协议费用开关 -->
+        <div class="section">
+            <h2>💰 核心创新4：协议费用机制</h2>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">💱</div>
+                    <div class="feature-title">费用分配</div>
+                    <div class="feature-description">
+                        总手续费 0.3%<br>
+                        • LP获得：0.25% - 0.3%<br>
+                        • 协议获得：0% - 0.05%<br>
+                        （可通过治理调整）
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-title">治理控制</div>
+                    <div class="feature-description">
+                        协议费用开关由治理控制<br>
+                        • 默认关闭（LP获得全部）<br>
+                        • 可开启1/6协议费<br>
+                        • 用于协议发展
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">收益模型</div>
+                    <div class="feature-description">
+                        为UNI代币创造价值<br>
+                        • 协议收入来源<br>
+                        • 可持续发展基金<br>
+                        • 激励生态建设
+                    </div>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <canvas id="feeDistributionCanvas" width="900" height="300"></canvas>
+            </div>
+        </div>
+        
+        <!-- 数学原理深度解析 -->
+        <div class="section">
+            <h2>📐 V2 数学原理深度解析</h2>
+            
+            <h3>1. 改进的恒定乘积公式</h3>
+            <div class="formula-box">
+                (x - 0.003·Δx) · (y - Δy) = x · y
+            </div>
+            
+            <div class="math-explanation">
+                <h4>公式推导：</h4>
+                <p><strong>输入含手续费：</strong> actual_input = input × 0.997</p>
+                <p><strong>输出计算：</strong> output = (actual_input × reserve_out) / (reserve_in + actual_input)</p>
+                <p><strong>价格影响：</strong> price_impact = (2 × actual_input) / (reserve_in + actual_input)</p>
+                
+                <h4>关键改进：</h4>
+                <ul style="margin-top: 15px; padding-left: 25px;">
+                    <li>手续费在交易前扣除，提高了计算精度</li>
+                    <li>使用整数运算避免精度损失</li>
+                    <li>优化的平方根计算（babylonian method）</li>
+                </ul>
+            </div>
+            
+            <div class="canvas-container">
+                <canvas id="mathCanvas" width="900" height="400"></canvas>
+            </div>
+        </div>
+        
+        <!-- 安全性改进 -->
+        <div class="section">
+            <h2>🔒 安全性与优化</h2>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <div class="feature-title">重入攻击防护</div>
+                    <div class="feature-description">
+                        使用互斥锁（Mutex）防止重入<br>
+                        • lock modifier保护<br>
+                        • 状态检查优先<br>
+                        • 严格的调用顺序
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚙️</div>
+                    <div class="feature-title">Gas优化</div>
+                    <div class="feature-description">
+                        相比V1减少约30% gas消耗<br>
+                        • 优化的存储布局<br>
+                        • 批量操作支持<br>
+                        • 缓存机制
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">价格操纵防护</div>
+                    <div class="feature-description">
+                        TWAP机制防止瞬时操纵<br>
+                        • 累积价格存储<br>
+                        • 时间加权平均<br>
+                        • 最小流动性锁定
+                    </div>
+                </div>
+            </div>
+            
+            <div class="code-block">
+// V2 安全机制示例
+contract UniswapV2Pair {
+    uint private unlocked = 1;
+    
+    modifier lock() {
+        require(unlocked == 1, 'LOCKED');
+        unlocked = 0;
+        _;
+        unlocked = 1;
+    }
+    
+    function swap(uint amount0Out, uint amount1Out, address to) external lock {
+        // 1. 验证输出金额
+        require(amount0Out > 0 || amount1Out > 0, 'INSUFFICIENT_OUTPUT');
+        
+        // 2. 获取储备量
+        (uint112 _reserve0, uint112 _reserve1,) = getReserves();
+        
+        // 3. 验证流动性
+        require(amount0Out < _reserve0 && amount1Out < _reserve1, 'INSUFFICIENT_LIQUIDITY');
+        
+        // 4. 转账
+        if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
+        if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
+        
+        // 5. 更新储备
+        _update(balance0, balance1, _reserve0, _reserve1);
+        
+        // 6. 验证K值
+        require(balance0Adjusted * balance1Adjusted >= uint(_reserve0) * _reserve1, 'K');
+    }
+}</div>
+        </div>
+        
+        <!-- 实际应用案例 -->
+        <div class="section">
+            <h2>💼 V2 实际应用案例</h2>
+            
+            <h3>案例1：稳定币交换优化</h3>
+            <div class="alert alert-info">
+                <strong>场景：</strong> 用户想要将 100,000 DAI 换成 USDC<br>
+                <strong>V1路径：</strong> DAI → ETH → USDC (0.6% 费用 = $600)<br>
+                <strong>V2路径：</strong> DAI → USDC (0.3% 费用 = $300)<br>
+                <strong>节省：</strong> $300 (50%费用减少)
+            </div>
+            
+            <h3>案例2：闪电贷套利</h3>
+            <div class="alert alert-info">
+                <strong>机会发现：</strong> ETH在Uniswap价格$2000，在其他DEX价格$2020<br>
+                <strong>操作流程：</strong><br>
+                1. 从Uniswap闪电贷100 ETH<br>
+                2. 在其他DEX卖出获得202,000 USDC<br>
+                3. 在Uniswap买回100.3 ETH（含费用）花费201,000 USDC<br>
+                4. 归还100.3 ETH给Uniswap<br>
+                <strong>净利润：</strong> 1,000 USDC（无需任何初始资金）
+            </div>
+            
+            <h3>案例3：价格预言机应用</h3>
+            <div class="alert alert-info">
+                <strong>借贷协议集成：</strong><br>
+                • Compound使用Uniswap V2 TWAP作为价格源<br>
+                • 10分钟时间窗口防止操纵<br>
+                • 为数十亿美元的借贷提供价格保障
+            </div>
+        </div>
+        
+        <!-- 性能对比 -->
+        <div class="section">
+            <h2>📈 V1 vs V2 性能对比</h2>
+            
+            <div class="canvas-container">
+                <canvas id="performanceCanvas" width="900" height="400"></canvas>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-label">Gas节省</div>
+                    <div class="info-value">~30%</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">支持的交易对</div>
+                    <div class="info-value">∞</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">日交易量增长</div>
+                    <div class="info-value">10x</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">TVL峰值</div>
+                    <div class="info-value">$10B+</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- V2的影响和未来 -->
+        <div class="section">
+            <h2>🌟 V2 的历史意义与影响</h2>
+            
+            <div class="alert alert-success">
+                <h3>🚀 革命性影响：</h3>
+                <ul style="margin-top: 15px; padding-left: 25px; line-height: 1.8;">
+                    <li><strong>DeFi基础设施：</strong> 成为整个DeFi生态的价格基准和流动性来源</li>
+                    <li><strong>可组合性典范：</strong> 被数百个协议集成，展示了DeFi的乐高积木特性</li>
+                    <li><strong>创新激发：</strong> 启发了SushiSwap、PancakeSwap等众多分叉和改进</li>
+                    <li><strong>闪电贷革命：</strong> 开创了无抵押借贷的新范式</li>
+                    <li><strong>预言机标准：</strong> TWAP成为去中心化预言机的行业标准</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <h3>⚠️ V2 仍存在的局限：</h3>
+                <ul style="margin-top: 15px; padding-left: 25px; line-height: 1.8;">
+                    <li><strong>资本效率：</strong> 流动性仍分散在0到∞的价格范围</li>
+                    <li><strong>无常损失：</strong> LP仍面临显著的无常损失风险</li>
+                    <li><strong>单一费率：</strong> 0.3%费率不适合所有交易对</li>
+                    <li><strong>滑点问题：</strong> 大额交易仍有较高滑点</li>
+                    <li>→ 这些问题将在V3中得到解决</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局变量
+        let currentPath = 'direct';
+        let manipulationLevel = 0;
+        
+        // 初始化所有图表
+        function initializeCharts() {
+            drawTradingPairs();
+            drawOracleVisualization();
+            drawFlashLoanDiagram();
+            drawFeeDistribution();
+            drawMathVisualization();
+            drawPerformanceComparison();
+        }
+        
+        // 1. 绘制交易对路径图
+        function drawTradingPairs() {
+            const canvas = document.getElementById('tradingPairsCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制背景
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const centerY = canvas.height / 2;
+            
+            if (currentPath === 'direct') {
+                // V2 直接路径
+                drawToken(ctx, 150, centerY, 'DAI', '#f4b643');
+                drawArrow(ctx, 250, centerY, 400, centerY, '#27ae60', 'V2: 0.3%费用');
+                drawToken(ctx, 500, centerY, 'USDC', '#2775ca');
+                
+                // 显示节省
+                ctx.fillStyle = '#27ae60';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('节省50%手续费！', 450, centerY + 80);
+            } else {
+                // V1 路由路径
+                drawToken(ctx, 100, centerY, 'DAI', '#f4b643');
+                drawArrow(ctx, 180, centerY, 280, centerY - 50, '#e74c3c', '0.3%');
+                drawToken(ctx, 350, centerY - 50, 'ETH', '#627eea');
+                drawArrow(ctx, 420, centerY - 50, 520, centerY, '#e74c3c', '0.3%');
+                drawToken(ctx, 600, centerY, 'USDC', '#2775ca');
+                
+                ctx.fillStyle = '#e74c3c';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('总费用: 0.6%', 450, centerY + 80);
+            }
+        }
+        
+        // 绘制代币图标
+        function drawToken(ctx, x, y, symbol, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, 40, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(symbol, x, y);
+        }
+        
+        // 绘制箭头
+        function drawArrow(ctx, x1, y1, x2, y2, color, label) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            // 箭头头部
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 15 * Math.cos(angle - Math.PI/6), y2 - 15 * Math.sin(angle - Math.PI/6));
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 15 * Math.cos(angle + Math.PI/6), y2 - 15 * Math.sin(angle + Math.PI/6));
+            ctx.stroke();
+            
+            // 标签
+            if (label) {
+                ctx.fillStyle = color;
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 - 15);
+            }
+        }
+        
+        // 2. 绘制预言机可视化
+        function drawOracleVisualization() {
+            const canvas = document.getElementById('oracleCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制坐标系
+            const padding = 60;
+            const width = canvas.width - 2 * padding;
+            const height = canvas.height - 2 * padding;
+            
+            // 坐标轴
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, padding + height);
+            ctx.lineTo(padding + width, padding + height);
+            ctx.stroke();
+            
+            // 生成价格数据
+            const blocks = 50;
+            const basePrice = 2000;
+            const priceData = [];
+            let cumulativePrice = 0;
+            
+            for (let i = 0; i < blocks; i++) {
+                let price = basePrice + Math.sin(i * 0.2) * 20 + Math.random() * 10 - 5;
+                
+                // 在中间添加操纵尝试
+                if (i === Math.floor(blocks / 2)) {
+                    price += price * (manipulationLevel / 100);
+                }
+                
+                priceData.push(price);
+                cumulativePrice += price;
+            }
+            
+            const twap = cumulativePrice / blocks;
+            
+            // 绘制即时价格线
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            priceData.forEach((price, i) => {
+                const x = padding + (i / blocks) * width;
+                const y = padding + height - ((price - 1950) / 100) * height;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            
+            // 绘制TWAP线
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([10, 5]);
+            ctx.beginPath();
+            ctx.moveTo(padding, padding + height - ((twap - 1950) / 100) * height);
+            ctx.lineTo(padding + width, padding + height - ((twap - 1950) / 100) * height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 标记操纵点
+            if (manipulationLevel !== 0) {
+                const manipX = padding + (width / 2);
+                const manipY = padding + height - ((priceData[Math.floor(blocks/2)] - 1950) / 100) * height;
+                
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(manipX, manipY, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = '#e74c3c';
+                ctx.font = '14px Arial';
+                ctx.fillText('价格操纵尝试', manipX + 15, manipY - 10);
+            }
+            
+            // 图例
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(padding + width - 200, padding + 20, 20, 3);
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.fillText('即时价格', padding + width - 170, padding + 25);
+            
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(padding + width - 200, padding + 45, 20, 3);
+            ctx.fillText('TWAP', padding + width - 170, padding + 50);
+            
+            // 更新显示
+            document.getElementById('twapPrice').textContent = '$' + twap.toFixed(0);
+        }
+        
+        // 3. 绘制闪电贷流程图
+        function drawFlashLoanDiagram() {
+            const canvas = document.getElementById('flashLoanCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制时间轴
+            const centerY = canvas.height / 2;
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(50, centerY);
+            ctx.lineTo(canvas.width - 50, centerY);
+            ctx.stroke();
+            
+            // 绘制交易步骤
+            const steps = [
+                { x: 150, label: '开始交易', detail: 'TX开始' },
+                { x: 350, label: '借出100 ETH', detail: '无抵押' },
+                { x: 550, label: '套利操作', detail: '获利' },
+                { x: 750, label: '归还100.3 ETH', detail: '含0.3%费' }
+            ];
+            
+            steps.forEach((step, index) => {
+                // 圆点
+                ctx.fillStyle = '#667eea';
+                ctx.beginPath();
+                ctx.arc(step.x, centerY, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 标签
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(step.label, step.x, centerY - 30);
+                
+                ctx.font = '12px Arial';
+                ctx.fillStyle = '#7f8c8d';
+                ctx.fillText(step.detail, step.x, centerY - 50);
+                
+                // 步骤编号
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText(index + 1, step.x, centerY + 5);
+            });
+            
+            // 强调原子性
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(100, centerY - 80, canvas.width - 200, 120);
+            ctx.setLineDash([]);
+            
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('原子交易：全部成功或全部回滚', canvas.width / 2, centerY + 60);
+        }
+        
+        // 4. 绘制费用分配图
+        function drawFeeDistribution() {
+            const canvas = document.getElementById('feeDistributionCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // 总费用圆
+            const totalRadius = 100;
+            ctx.fillStyle = '#667eea';
+            ctx.beginPath();
+            ctx.arc(centerX - 200, centerY, totalRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('0.3%', centerX - 200, centerY - 10);
+            ctx.fillText('总费用', centerX - 200, centerY + 15);
+            
+            // 箭头指向分配
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 3;
+            
+            // LP份额
+            drawArrow(ctx, centerX - 100, centerY - 30, centerX + 50, centerY - 30, '#27ae60');
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.arc(centerX + 150, centerY - 30, 60, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText('LP: 0.25%', centerX + 150, centerY - 30);
+            
+            // 协议份额（可选）
+            drawArrow(ctx, centerX - 100, centerY + 30, centerX + 50, centerY + 30, '#e67e22');
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.arc(centerX + 150, centerY + 30, 40, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('协议: 0.05%', centerX + 150, centerY + 30);
+            ctx.font = '12px Arial';
+            ctx.fillText('(可选)', centerX + 150, centerY + 50);
+        }
+        
+        // 5. 绘制数学可视化
+        function drawMathVisualization() {
+            const canvas = document.getElementById('mathCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const padding = 60;
+            const width = canvas.width - 2 * padding;
+            const height = canvas.height - 2 * padding;
+            
+            // 坐标轴
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, padding + height);
+            ctx.lineTo(padding + width, padding + height);
+            ctx.stroke();
+            
+            // V1和V2的K曲线对比
+            const k = 100000;
+            
+            // V2曲线（考虑手续费）
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            for (let x = 1; x <= 30; x += 0.5) {
+                const y = k / x;
+                const px = padding + (x / 30) * width;
+                const py = padding + height - (y / 30000) * height;
+                
+                if (x === 1) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            }
+            ctx.stroke();
+            
+            // 标签
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.fillText('Reserve X', padding + width - 50, padding + height + 30);
+            ctx.save();
+            ctx.translate(20, padding + height/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText('Reserve Y', 0, 0);
+            ctx.restore();
+            
+            // 图例
+            ctx.fillStyle = '#3498db';
+            ctx.font = '14px Arial';
+            ctx.fillText('V2: (x - 0.003Δx)(y - Δy) = xy', padding + width - 250, padding + 30);
+        }
+        
+        // 6. 绘制性能对比图
+        function drawPerformanceComparison() {
+            const canvas = document.getElementById('performanceCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const metrics = [
+                { name: 'Gas费用', v1: 100, v2: 70 },
+                { name: '交易对数', v1: 100, v2: 1000 },
+                { name: '日交易量', v1: 100, v2: 1000 },
+                { name: 'TVL', v1: 100, v2: 500 }
+            ];
+            
+            const barWidth = 60;
+            const barSpacing = 150;
+            const maxHeight = 250;
+            const startX = 100;
+            const baseY = 320;
+            
+            metrics.forEach((metric, index) => {
+                const x = startX + index * barSpacing;
+                
+                // V1 柱状图
+                const v1Height = (metric.v1 / 1000) * maxHeight;
+                ctx.fillStyle = '#f093fb';
+                ctx.fillRect(x, baseY - v1Height, barWidth, v1Height);
+                
+                // V2 柱状图
+                const v2Height = (metric.v2 / 1000) * maxHeight;
+                ctx.fillStyle = '#4facfe';
+                ctx.fillRect(x + barWidth + 10, baseY - v2Height, barWidth, v2Height);
+                
+                // 数值标签
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(metric.v1, x + barWidth/2, baseY - v1Height - 10);
+                ctx.fillText(metric.v2, x + barWidth + 10 + barWidth/2, baseY - v2Height - 10);
+                
+                // 指标名称
+                ctx.font = '14px Arial';
+                ctx.fillText(metric.name, x + barWidth + 5, baseY + 25);
+            });
+            
+            // 图例
+            ctx.fillStyle = '#f093fb';
+            ctx.fillRect(canvas.width - 150, 30, 20, 15);
+            ctx.fillStyle = '#333';
+            ctx.font = '14px Arial';
+            ctx.fillText('V1', canvas.width - 120, 42);
+            
+            ctx.fillStyle = '#4facfe';
+            ctx.fillRect(canvas.width - 150, 55, 20, 15);
+            ctx.fillText('V2', canvas.width - 120, 67);
+        }
+        
+        // 交互函数
+        function updateTradePath() {
+            const select = document.getElementById('tradePathSelect');
+            currentPath = select.value;
+            drawTradingPairs();
+            updateTradeInfo();
+        }
+        
+        function updateTradeInfo() {
+            const amount = parseFloat(document.getElementById('tradeAmountUSD').value);
+            
+            if (currentPath === 'direct') {
+                document.getElementById('pathSteps').textContent = '1';
+                document.getElementById('totalFee').textContent = '0.30%';
+                document.getElementById('feeAmount').textContent = '$' + (amount * 0.003).toFixed(2);
+                document.getElementById('savedAmount').textContent = '$' + (amount * 0.003).toFixed(2);
+            } else {
+                document.getElementById('pathSteps').textContent = '2';
+                document.getElementById('totalFee').textContent = '0.60%';
+                document.getElementById('feeAmount').textContent = '$' + (amount * 0.006).toFixed(2);
+                document.getElementById('savedAmount').textContent = '$0';
+            }
+        }
+        
+        function simulateTrade() {
+            updateTradeInfo();
+            // 添加动画效果
+            const cards = document.querySelectorAll('.info-card');
+            cards.forEach(card => {
+                card.style.animation = 'pulse 0.5s';
+                setTimeout(() => card.style.animation = '', 500);
+            });
+        }
+        
+        function simulateManipulation() {
+            drawOracleVisualization();
+        }
+        
+        function calculateFlashLoan() {
+            const amount = parseFloat(document.getElementById('loanAmount').value);
+            const profitRate = parseFloat(document.getElementById('profitRate').value);
+            
+            const fee = amount * 0.003;
+            const profit = amount * (profitRate / 100);
+            const netProfit = profit - fee;
+            
+            document.getElementById('borrowAmount').textContent = amount + ' ETH';
+            document.getElementById('flashFee').textContent = fee.toFixed(3) + ' ETH';
+            document.getElementById('arbProfit').textContent = profit.toFixed(3) + ' ETH';
+            document.getElementById('netProfit').textContent = netProfit.toFixed(3) + ' ETH';
+            
+            // 更新颜色
+            const netProfitElement = document.getElementById('netProfit');
+            netProfitElement.parentElement.style.background = netProfit > 0 
+                ? 'linear-gradient(135deg, #27ae60, #2ecc71)' 
+                : 'linear-gradient(135deg, #e74c3c, #c0392b)';
+        }
+        
+        // 事件监听器
+        document.getElementById('manipulationSlider').addEventListener('input', function(e) {
+            manipulationLevel = parseFloat(e.target.value);
+            document.getElementById('manipulationValue').textContent = manipulationLevel;
+            drawOracleVisualization();
+        });
+        
+        document.getElementById('tradeAmountUSD').addEventListener('input', updateTradeInfo);
+        
+        // 初始化
+        window.addEventListener('load', function() {
+            initializeCharts();
+            updateTradeInfo();
+            calculateFlashLoan();
+        });
+    </script>
+</body>
+</html>
