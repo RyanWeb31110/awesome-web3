@@ -6,7 +6,7 @@ Uniswap V2在2020年5月推出，带来了革命性的改进。
 
 ### V1 的痛点回顾
 
-还记得视频中的农业例子吗？如果农民想用土豆换玉米：
+如果农民想用土豆换玉米：
 
 - **V1的问题**：土豆→现金→玉米（需要两次交换）
 - **V2的解决**：土豆→玉米（直接交换）
@@ -14,7 +14,9 @@ Uniswap V2在2020年5月推出，带来了革命性的改进。
 在加密世界中：
 
 - **V1限制**：DAI→ETH→USDC（0.6%手续费）
-- **V2改进**：DAI→USDC（0.3%手续费）## 二、Uniswap V2 的核心创新详解
+- **V2改进**：DAI→USDC（0.3%手续费）
+
+## 二、Uniswap V2 的核心创新详解
 
 ### 创新1：ERC20-ERC20 直接交易
 
@@ -24,16 +26,77 @@ V2通过引入**WETH（Wrapped ETH）**概念，将ETH也视为ERC20代币：
 
 ```solidity
 // V2 工厂合约可以创建任意代币对
-function createPair(address tokenA, address tokenB) external returns (address pair) {
-    require(tokenA != tokenB, 'IDENTICAL_ADDRESSES');
-    (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-    require(getPair[token0][token1] == address(0), 'PAIR_EXISTS');
+contract UniswapV2Factory {
+    mapping(address => mapping(address => address)) public getPair;
+    address[] public allPairs;
     
-    // 使用CREATE2创建确定性地址
-    bytes memory bytecode = type(UniswapV2Pair).creationCode;
-    bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-    assembly {
-        pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+    
+    function createPair(address tokenA, address tokenB) external returns (address pair) {
+        require(tokenA != tokenB, 'UniswapV2: IDENTICAL_ADDRESSES');
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(token0 != address(0), 'UniswapV2: ZERO_ADDRESS');
+        require(getPair[token0][token1] == address(0), 'UniswapV2: PAIR_EXISTS');
+        
+        // 使用CREATE2创建确定性地址
+        bytes memory bytecode = type(UniswapV2Pair).creationCode;
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
+        assembly {
+            pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
+        }
+        
+        IUniswapV2Pair(pair).initialize(token0, token1);
+        getPair[token0][token1] = pair;
+        getPair[token1][token0] = pair;
+        allPairs.push(pair);
+        
+        emit PairCreated(token0, token1, pair, allPairs.length);
+    }
+}
+```
+
+**关键实现细节:**
+
+- 使用 CREATE2 确保交易对地址的确定性
+- 维护双向映射以快速查找交易对
+- 代币地址排序确保唯一性
+
+
+
+#### Router 合约功能：多跳交换路径
+
+```
+function swapExactTokensForTokens(
+    uint amountIn,
+    uint amountOutMin,
+    address[] calldata path,
+    address to,
+    uint deadline
+) external ensure(deadline) returns (uint[] memory amounts) {
+    amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path);
+    require(amounts[amounts.length - 1] >= amountOutMin, 'UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT');
+    
+    TransferHelper.safeTransferFrom(
+        path[0], msg.sender, UniswapV2Library.pairFor(factory, path[0], path[1]), amounts[0]
+    );
+    
+    _swap(amounts, path, to);
+}
+
+function _swap(uint[] memory amounts, address[] memory path, address _to) internal {
+    for (uint i; i < path.length - 1; i++) {
+        (address input, address output) = (path[i], path[i + 1]);
+        (address token0,) = UniswapV2Library.sortTokens(input, output);
+        uint amountOut = amounts[i + 1];
+        
+        (uint amount0Out, uint amount1Out) = input == token0 ? 
+            (uint(0), amountOut) : (amountOut, uint(0));
+            
+        address to = i < path.length - 2 ? 
+            UniswapV2Library.pairFor(factory, output, path[i + 2]) : _to;
+            
+        IUniswapV2Pair(UniswapV2Library.pairFor(factory, input, output))
+            .swap(amount0Out, amount1Out, to, new bytes(0));
     }
 }
 ```
@@ -45,6 +108,16 @@ V2的Router合约实现了智能路由：
 - **最短路径算法**：自动寻找最优交易路径
 - **多跳支持**：最多支持3跳交易
 - **滑点保护**：设置最小输出金额
+
+#### 滑点保护机制
+
+Router 合约通过以下方式实现滑点保护：
+
+1. **最小输出保证**: `amountOutMin` 参数
+2. **最大输入限制**: `amountInMax` 参数  
+3. **截止时间**: `deadline` 参数防止长时间挂起
+
+
 
 ### 创新2：时间加权平均价格（TWAP）预言机
 
@@ -272,6 +345,6 @@ Uniswap V2不仅是V1的升级，更是DeFi基础设施的关键一环：
    - 为LP创造了数亿美元收益
    - 降低了全球金融访问门槛
 
-正如视频中所说，Uniswap实现了"无中介交易"的理想。V2将这个理想推向了新高度，真正实现了任意代币间的直接交换，就像农民可以直接用土豆换玉米，而不需要先换成现金。
+Uniswap实现了"无中介交易"的理想。V2将这个理想推向了新高度，真正实现了任意代币间的直接交换，就像农民可以直接用土豆换玉米，而不需要先换成现金。
 
 V2的成功证明了去中心化金融不仅可行，而且在某些方面比传统金融更高效。它为V3的革命性创新奠定了基础，而V3将解决V2遗留的资本效率问题，开启AMM的新纪元。
